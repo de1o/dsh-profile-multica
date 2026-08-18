@@ -53,6 +53,7 @@
     "clean": "node -e \"require('node:fs').rmSync('lib',{recursive:true,force:true})\"",
     "prepare": "pnpm run build",
     "prepack": "pnpm run build",
+    "smoke:pack": "node scripts/smoke-packed-install.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "typecheck": "tsc -p tsconfig.json --noEmit"
