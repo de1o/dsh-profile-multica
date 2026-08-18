@@ -52,8 +52,11 @@ pnpm install
 pnpm run typecheck
 pnpm test
 pnpm run build
+pnpm run smoke:pack
 pnpm pack
 ```
+
+`smoke:pack` packs the current checkout, installs the tarball into an isolated profile using the supported official DSH release, verifies `--probe`, and removes the temporary profile.
 
 Before publishing, add the `dsh-plugin` GitHub topic and verify the packed tarball against a clean official CLI installation.
 

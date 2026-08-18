@@ -52,8 +52,11 @@ pnpm install
 pnpm run typecheck
 pnpm test
 pnpm run build
+pnpm run smoke:pack
 pnpm pack
 ```
+
+`smoke:pack` 会打包当前 checkout，使用受支持的官方 DSH 版本把 tarball 安装到隔离 profile，验证 `--probe`，然后删除临时 profile。
 
 发布前请为 GitHub 仓库添加 `dsh-plugin` topic，并使用全新安装的官方 CLI 验证打包后的 tarball。
 
