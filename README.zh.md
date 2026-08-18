@@ -4,6 +4,8 @@
 
 一个可安装的社区 bundle，通过带版本的 JSONL 进程协议把官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) CLI 接入 Multica。
 
+请求、事件、取消和退出语义见[协议参考](docs/protocol.zh.md)。
+
 安装后，独立 profile 提供三个命令：
 
 ```bash
