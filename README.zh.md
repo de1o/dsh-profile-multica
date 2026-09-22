@@ -14,9 +14,9 @@ dsh --profile multica --list-models
 dsh --profile multica --stdio
 ```
 
-`--probe` 输出 Multica 使用的发现帧。`--list-models` 投影已安装的 DSH 提供方、模型与推理等级。`--stdio` 接受一个版本 1 的 execute 请求，以 JSONL 流式输出 Agent 和 Session 事件，允许取消活动请求，刷新持久化数据，输出一个终态结果后退出。协议帧写入 stdout，诊断写入 stderr。
+`--probe` 输出 Multica 使用的发现帧。`--list-models` 投影已安装的 DSH 提供方、模型与推理等级。`--stdio` 接受一个版本 2 的 execute 请求，以 JSONL 流式输出 Agent 和 Session 事件，允许取消活动请求，刷新持久化数据，输出一个终态结果后退出。协议帧写入 stdout，诊断写入 stderr。
 
-execute 请求可以创建新 Agent 或恢复持久化 Session，选择提供方、模型与推理等级，并挂载任务作用域内的 stdio 或 Streamable HTTP MCP server。`MULTICA_DSH_SESSION_ROOT` 指定 JSONL 持久化目录。`DSH_PERMISSION_MODE` 可设为 `read-only`、`workspace-write` 或 `danger-full-access`，默认为 `workspace-write`。该传输不支持交互审批，因此超出所选策略的操作会直接失败。
+execute 请求可以创建新 Agent 或恢复持久化 Session，选择提供方、模型与推理等级，挂载任务作用域内的 stdio 或 Streamable HTTP MCP server，并设置工具调用软、硬预算。Multica 的任务凭证只会在 DSH 管理的 shell 内以 `DSH_MULTICA_TASK_TOKEN` 暴露；Multica CLI 会消费该变量，不会把父进程的 `MULTICA_TOKEN` 原样暴露进去。`MULTICA_DSH_SESSION_ROOT` 指定 JSONL 持久化目录。`DSH_PERMISSION_MODE` 可设为 `read-only`、`workspace-write` 或 `danger-full-access`，默认为 `workspace-write`。该传输不支持交互审批，因此超出所选策略的操作会直接失败。
 
 ## 环境要求
 
@@ -39,7 +39,7 @@ dsh --profile multica --probe
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.1.0.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.0.tgz
 dsh --profile multica --probe
 ```
 

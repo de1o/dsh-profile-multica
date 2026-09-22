@@ -1,7 +1,13 @@
 /** Versioned Multica JSONL wire types and untrusted-input validation. */
 
 /** Protocol version implemented by both Multica and this bundle. */
-export const MULTICA_PROTOCOL_VERSION = 1
+export const MULTICA_PROTOCOL_VERSION = 2
+
+/** Per-run guardrails supplied by Multica. */
+export interface MulticaToolCallBudget {
+  soft_limit: number
+  hard_limit: number
+}
 
 /** Model selection carried by an execute command. */
 export interface MulticaModelSelection {
@@ -31,7 +37,7 @@ export type MulticaMcpServer =
 
 /** Start one task. A bridge process accepts at most one execute command. */
 export interface MulticaExecuteCommand {
-  v: 1
+  v: 2
   type: 'execute'
   request_id: string
   cwd: string
@@ -40,11 +46,12 @@ export interface MulticaExecuteCommand {
   model?: MulticaModelSelection
   reasoning_effort?: string
   mcp_servers: MulticaMcpServer[]
+  tool_call_budget?: MulticaToolCallBudget
 }
 
 /** Cancel the currently active task. */
 export interface MulticaCancelCommand {
-  v: 1
+  v: 2
   type: 'cancel'
   request_id: string
 }
@@ -86,6 +93,19 @@ function timeout(value: unknown, field: string): number | undefined {
     throw new MulticaProtocolError('INVALID_REQUEST', `${field} must be a positive integer`)
   }
   return value
+}
+
+function toolCallBudget(value: unknown): MulticaToolCallBudget {
+  const source = record(value, 'tool_call_budget')
+  const softLimit = timeout(source.soft_limit, 'tool_call_budget.soft_limit')
+  const hardLimit = timeout(source.hard_limit, 'tool_call_budget.hard_limit')
+  if (softLimit === undefined || hardLimit === undefined) {
+    throw new MulticaProtocolError('INVALID_REQUEST', 'tool_call_budget requires soft_limit and hard_limit')
+  }
+  if (softLimit >= hardLimit) {
+    throw new MulticaProtocolError('INVALID_REQUEST', 'tool_call_budget.soft_limit must be less than hard_limit')
+  }
+  return { soft_limit: softLimit, hard_limit: hardLimit }
 }
 
 function mcpServer(value: unknown, index: number): MulticaMcpServer {
@@ -137,7 +157,7 @@ export function parseMulticaCommand(line: string): MulticaCommand {
   }
   const type = string(source.type, 'type')
   const requestId = string(source.request_id, 'request_id')
-  if (type === 'cancel') return { v: 1, type, request_id: requestId }
+  if (type === 'cancel') return { v: 2, type, request_id: requestId }
   if (type !== 'execute') throw new MulticaProtocolError('UNKNOWN_COMMAND', `unsupported command type ${JSON.stringify(type)}`)
   const modelSource = source.model === undefined ? undefined : record(source.model, 'model')
   const model: MulticaModelSelection | undefined = modelSource === undefined
@@ -152,7 +172,7 @@ export function parseMulticaCommand(line: string): MulticaCommand {
   const servers = source.mcp_servers === undefined ? [] : source.mcp_servers
   if (!Array.isArray(servers)) throw new MulticaProtocolError('INVALID_REQUEST', 'mcp_servers must be an array')
   return {
-    v: 1,
+    v: 2,
     type,
     request_id: requestId,
     cwd: string(source.cwd, 'cwd'),
@@ -165,6 +185,9 @@ export function parseMulticaCommand(line: string): MulticaCommand {
       ? {}
       : { reasoning_effort: string(source.reasoning_effort, 'reasoning_effort') },
     mcp_servers: servers.map(mcpServer),
+    ...source.tool_call_budget === undefined
+      ? {}
+      : { tool_call_budget: toolCallBudget(source.tool_call_budget) },
   }
 }
 

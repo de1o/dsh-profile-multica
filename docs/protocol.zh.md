@@ -2,14 +2,14 @@
 
 [English](protocol.md) | 中文
 
-桥接器实现协议版本 `1`。每条输入命令和输出事件都是一个紧凑 JSON 对象，以 `\n` 结尾。Multica 向 stdin 写入命令、从 stdout 读取协议事件；stderr 仅承载诊断文本。
+桥接器实现协议版本 `2`。每条输入命令和输出事件都是一个紧凑 JSON 对象，以 `\n` 结尾。Multica 向 stdin 写入命令、从 stdout 读取协议事件；stderr 仅承载诊断文本。
 
 ## 进程模式
 
 `dsh --profile multica --probe` 输出一个发现对象并成功退出：
 
 ```json
-{"v":1,"type":"probe","runtime":"dsh","plugin_version":"0.1.0","protocol_version":1}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.0","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` 输出一个 `models` 事件。模型 id 分别对 DSH 提供方 id 和模型 id 做百分号编码，并用一个 `/` 分隔。
@@ -21,14 +21,14 @@
 最小请求如下：
 
 ```json
-{"v":1,"type":"execute","request_id":"task-1","cwd":"/workspace","prompt":"修复失败的测试"}
+{"v":2,"type":"execute","request_id":"task-1","cwd":"/workspace","prompt":"修复失败的测试"}
 ```
 
 可选字段可以选择模型、恢复持久化 Session，并添加任务作用域内的 MCP server：
 
 ```json
 {
-  "v": 1,
+  "v": 2,
   "type": "execute",
   "request_id": "task-2",
   "cwd": "/workspace",
@@ -38,6 +38,10 @@
     "provider": "deepseek",
     "id": "deepseek-chat",
     "reasoning_effort": "high"
+  },
+  "tool_call_budget": {
+    "soft_limit": 60,
+    "hard_limit": 120
   },
   "mcp_servers": [
     {
@@ -59,7 +63,7 @@
 }
 ```
 
-`prompt` 可以为空。`request_id`、`cwd`、提供方/模型 id、Session id、MCP 名称、命令与 URL 必须是非空字符串。超时单位为毫秒，必须是正的安全整数。
+`prompt` 可以为空。`request_id`、`cwd`、提供方/模型 id、Session id、MCP 名称、命令与 URL 必须是非空字符串。超时单位为毫秒，必须是正的安全整数。工具调用限制也必须是正的安全整数，并满足 `soft_limit < hard_limit`。达到软限制时，桥接器要求 Agent 停止宽泛探索并基于已有证据收尾；达到硬限制时取消 Agent，并返回 `TOOL_CALL_BUDGET_EXCEEDED`。
 
 ## 输出事件
 
@@ -79,7 +83,7 @@
 使用下面的命令取消活动请求：
 
 ```json
-{"v":1,"type":"cancel","request_id":"task-1"}
+{"v":2,"type":"cancel","request_id":"task-1"}
 ```
 
 请求 id 必须与活动 execute 命令一致。桥接器会中止尚未完成的初始化、要求已创建的 Agent 取消、在 Agent 进入空闲状态后刷新持久化数据、写入终态结果并退出。关闭 stdin 也会取消活动任务。在同一进程中启动第二个 execute 命令会返回 `REQUEST_ACTIVE`。

@@ -14,9 +14,9 @@ dsh --profile multica --list-models
 dsh --profile multica --stdio
 ```
 
-`--probe` prints the discovery frame used by Multica. `--list-models` projects the installed DSH providers, models, and reasoning levels. `--stdio` accepts one version-1 execute request, streams Agent and Session events as JSONL, accepts cancellation for the active request, flushes persistence, prints one terminal result, and exits. Protocol frames use stdout; diagnostics use stderr.
+`--probe` prints the discovery frame used by Multica. `--list-models` projects the installed DSH providers, models, and reasoning levels. `--stdio` accepts one version-2 execute request, streams Agent and Session events as JSONL, accepts cancellation for the active request, flushes persistence, prints one terminal result, and exits. Protocol frames use stdout; diagnostics use stderr.
 
-An execute request can create a fresh Agent or resume a persisted Session, select a provider/model/reasoning level, and mount task-scoped stdio or Streamable HTTP MCP servers. `MULTICA_DSH_SESSION_ROOT` selects the JSONL persistence directory. `DSH_PERMISSION_MODE` may be `read-only`, `workspace-write`, or `danger-full-access`; the default is `workspace-write`. This transport has no interactive approval round trip, so operations outside the selected policy fail instead of waiting.
+An execute request can create a fresh Agent or resume a persisted Session, select a provider/model/reasoning level, mount task-scoped stdio or Streamable HTTP MCP servers, and set soft/hard tool-call budgets. A Multica task credential is exposed only inside DSH-managed shells as `DSH_MULTICA_TASK_TOKEN`; the Multica CLI consumes it without exposing the parent process's `MULTICA_TOKEN`. `MULTICA_DSH_SESSION_ROOT` selects the JSONL persistence directory. `DSH_PERMISSION_MODE` may be `read-only`, `workspace-write`, or `danger-full-access`; the default is `workspace-write`. This transport has no interactive approval round trip, so operations outside the selected policy fail instead of waiting.
 
 ## Requirements
 
@@ -39,7 +39,7 @@ To install a local checkout, build a tarball first:
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.1.0.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.0.tgz
 dsh --profile multica --probe
 ```
 

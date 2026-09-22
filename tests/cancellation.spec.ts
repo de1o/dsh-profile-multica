@@ -62,10 +62,10 @@ describe('Multica cancellation', () => {
     apply(ctx, { mode: 'stdio' })
     await new Promise(resolve => setTimeout(resolve, 0))
     input.write(`${JSON.stringify({
-      v: 1, type: 'execute', request_id: 'request-cancel', cwd: '/work', prompt: 'wait',
+      v: 2, type: 'execute', request_id: 'request-cancel', cwd: '/work', prompt: 'wait',
     })}\n`)
     await ready.promise
-    input.write(`${JSON.stringify({ v: 1, type: 'cancel', request_id: 'request-cancel' })}\n`)
+    input.write(`${JSON.stringify({ v: 2, type: 'cancel', request_id: 'request-cancel' })}\n`)
 
     expect(await exited).toBe(0)
     expect(cancelled).toBe(1)

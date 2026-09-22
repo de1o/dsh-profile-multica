@@ -2,14 +2,14 @@
 
 English | [中文](protocol.zh.md)
 
-The bridge implements protocol version `1`. Each input command and output event is one compact JSON object followed by `\n`. Multica writes commands to stdin, reads protocol events from stdout, and treats stderr as diagnostic text only.
+The bridge implements protocol version `2`. Each input command and output event is one compact JSON object followed by `\n`. Multica writes commands to stdin, reads protocol events from stdout, and treats stderr as diagnostic text only.
 
 ## Process modes
 
 `dsh --profile multica --probe` prints one discovery object and exits successfully:
 
 ```json
-{"v":1,"type":"probe","runtime":"dsh","plugin_version":"0.1.0","protocol_version":1}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.0","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` prints one `models` event. Model ids percent-encode the DSH provider and model ids around one `/` separator.
@@ -21,14 +21,14 @@ The bridge implements protocol version `1`. Each input command and output event 
 The minimal command is:
 
 ```json
-{"v":1,"type":"execute","request_id":"task-1","cwd":"/workspace","prompt":"Fix the failing test"}
+{"v":2,"type":"execute","request_id":"task-1","cwd":"/workspace","prompt":"Fix the failing test"}
 ```
 
 Optional fields select a model, restore a durable session, and add task-scoped MCP servers:
 
 ```json
 {
-  "v": 1,
+  "v": 2,
   "type": "execute",
   "request_id": "task-2",
   "cwd": "/workspace",
@@ -38,6 +38,10 @@ Optional fields select a model, restore a durable session, and add task-scoped M
     "provider": "deepseek",
     "id": "deepseek-chat",
     "reasoning_effort": "high"
+  },
+  "tool_call_budget": {
+    "soft_limit": 60,
+    "hard_limit": 120
   },
   "mcp_servers": [
     {
@@ -59,7 +63,7 @@ Optional fields select a model, restore a durable session, and add task-scoped M
 }
 ```
 
-`prompt` may be empty. `request_id`, `cwd`, provider/model ids, session ids, MCP names, commands, and URLs must be non-empty strings. Timeouts are positive safe integers in milliseconds.
+`prompt` may be empty. `request_id`, `cwd`, provider/model ids, session ids, MCP names, commands, and URLs must be non-empty strings. Timeouts are positive safe integers in milliseconds. Tool-call limits must be positive safe integers with `soft_limit < hard_limit`. At the soft limit, the bridge asks the Agent to stop broad exploration and finish from collected evidence. At the hard limit, it cancels the Agent and returns `TOOL_CALL_BUDGET_EXCEEDED`.
 
 ## Events
 
@@ -79,7 +83,7 @@ Malformed commands produce `protocol_error`. Invalid JSON or an invalid execute 
 Cancel the active request with:
 
 ```json
-{"v":1,"type":"cancel","request_id":"task-1"}
+{"v":2,"type":"cancel","request_id":"task-1"}
 ```
 
 The request id must match the active execute command. The bridge aborts pending setup, asks an already-created Agent to cancel, flushes durable session state after the Agent becomes idle, writes the terminal result, and exits. Closing stdin also cancels active work. Starting a second execute command in the same process reports `REQUEST_ACTIVE`.
