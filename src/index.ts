@@ -130,21 +130,25 @@ function mcpConfig(server: MulticaMcpServer, cwd: string): McpClient.Config {
 async function setupAgent(agentCtx: Context, chosen: ModelSelection, command: MulticaExecuteCommand): Promise<void> {
   const selected: ModelSelectionRef = { current: chosen, assembled: undefined }
   installModelSelection(agentCtx, selected)
-  const taskToken = process.env.MULTICA_TOKEN
-  if (taskToken !== undefined && taskToken !== '') {
-    agentCtx.shellEnv.register({
-      name: 'multica-task-auth',
-      variables: {
-        [DSH_MULTICA_TASK_TOKEN]: {
-          description: 'Task-scoped Multica API credential forwarded by the Multica runtime bridge.',
-        },
-      },
-      resolve: () => ({ [DSH_MULTICA_TASK_TOKEN]: taskToken }),
-    })
-  }
   for (const server of command.mcp_servers) {
     await agentCtx.plugin(McpClient, mcpConfig(server, command.cwd))
   }
+}
+
+function registerTaskShellEnv(ctx: Context): void {
+  const taskToken = process.env.MULTICA_TOKEN
+  if (taskToken === undefined || taskToken === '') return
+  const shellEnv = ctx.get('shellEnv')
+  if (shellEnv === undefined) throw new Error('multica-runner: shellEnv service is unavailable')
+  shellEnv.register({
+    name: 'multica-task-auth',
+    variables: {
+      [DSH_MULTICA_TASK_TOKEN]: {
+        description: 'Task-scoped Multica API credential forwarded by the Multica runtime bridge.',
+      },
+    },
+    resolve: () => ({ [DSH_MULTICA_TASK_TOKEN]: taskToken }),
+  })
 }
 
 function contentText(blocks: readonly ContentBlock[]): string {
@@ -512,6 +516,7 @@ async function run(ctx: Context, mode: MulticaMode, io: BridgeIo): Promise<void>
     io.exit(0)
     return
   }
+  registerTaskShellEnv(ctx)
   stdio(ctx, io)
 }
 

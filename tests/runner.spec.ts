@@ -61,7 +61,7 @@ describe('Multica runner', () => {
     expect(await run('probe')).toMatchObject({
       code: 0,
       err: '',
-      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.0', protocol_version: 2 }],
+      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.1', protocol_version: 2 }],
     })
   })
 
@@ -120,7 +120,7 @@ describe('Multica runner', () => {
     let shellEnvContributor: { resolve(execution: unknown): Record<string, string> } | undefined
     const checkpoints: string[] = []
     const agentCtx = new Context()
-    agentCtx.provide('shellEnv', {
+    ctx.provide('shellEnv', {
       register: (contributor: typeof shellEnvContributor) => {
         shellEnvContributor = contributor
         return () => {}
