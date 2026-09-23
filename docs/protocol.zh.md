@@ -9,12 +9,14 @@
 `dsh --profile multica --probe` 输出一个发现对象并成功退出：
 
 ```json
-{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.2","protocol_version":2}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.3","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` 输出一个 `models` 事件。模型 id 分别对 DSH 提供方 id 和模型 id 做百分号编码，并用一个 `/` 分隔。
 
 `dsh --profile multica --stdio` 启动任务协议。它先输出 `ready`，然后至多接受一条 `execute` 命令；请求活动期间可以再发送一条 `cancel` 命令。
+
+仅当 DSH 附件服务可用时，`ready.capabilities.images` 才为 true。Multica 发送带图任务前会检查这一能力。
 
 ## 执行请求
 
@@ -33,6 +35,7 @@
   "request_id": "task-2",
   "cwd": "/workspace",
   "prompt": "继续实现",
+  "image_attachment_ids": ["11111111-1111-1111-1111-111111111111"],
   "resume_session_id": "multica-existing-session",
   "model": {
     "provider": "deepseek",
@@ -72,6 +75,8 @@
 `progress_reminder` 是可选项。当 Agent 连续执行 `tool_calls` 次工具仍未输出可见文本，或工具活动静默达到 `silence_ms` 时，桥接器会追加一条隐藏的 next-step 提醒，要求 Agent 简要汇报进展后继续执行。在 Agent 输出可见文本前，桥接器不会重复追加提醒。
 
 ## 输出事件
+
+可选的 `image_attachment_ids` 最多包含 10 个本轮聊天附件 ID。桥接器用任务作用域凭证读取图片，经 DSH 附件服务校验后作为图片块加入用户消息；读取或校验失败会使任务明确失败，任务凭证不会发送给签名下载地址。
 
 桥接器接受 execute 命令后，会先于任务输出发送 `session` 事件，随后流式发送以下事件：
 

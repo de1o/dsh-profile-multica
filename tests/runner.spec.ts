@@ -61,7 +61,7 @@ describe('Multica runner', () => {
     expect(await run('probe')).toMatchObject({
       code: 0,
       err: '',
-      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.2', protocol_version: 2 }],
+      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.3', protocol_version: 2 }],
     })
   })
 

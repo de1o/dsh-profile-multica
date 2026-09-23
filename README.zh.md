@@ -41,7 +41,7 @@ dsh --profile multica --probe
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.2.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.3.tgz
 dsh --profile multica --probe
 ```
 
