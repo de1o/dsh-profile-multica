@@ -9,7 +9,7 @@ The bridge implements protocol version `2`. Each input command and output event 
 `dsh --profile multica --probe` prints one discovery object and exits successfully:
 
 ```json
-{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.0","protocol_version":2}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.2","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` prints one `models` event. Model ids percent-encode the DSH provider and model ids around one `/` separator.
@@ -43,6 +43,10 @@ Optional fields select a model, restore a durable session, and add task-scoped M
     "soft_limit": 60,
     "hard_limit": 120
   },
+  "progress_reminder": {
+    "silence_ms": 90000,
+    "tool_calls": 5
+  },
   "mcp_servers": [
     {
       "name": "local-tools",
@@ -64,6 +68,8 @@ Optional fields select a model, restore a durable session, and add task-scoped M
 ```
 
 `prompt` may be empty. `request_id`, `cwd`, provider/model ids, session ids, MCP names, commands, and URLs must be non-empty strings. Timeouts are positive safe integers in milliseconds. Tool-call limits must be positive safe integers with `soft_limit < hard_limit`. At the soft limit, the bridge asks the Agent to stop broad exploration and finish from collected evidence. At the hard limit, it cancels the Agent and returns `TOOL_CALL_BUDGET_EXCEEDED`.
+
+`progress_reminder` is optional. After either `tool_calls` calls without visible assistant text or `silence_ms` of silent tool activity, the bridge appends one hidden next-step reminder asking the Agent to publish concise progress and continue. It does not append another reminder until the Agent emits visible text.
 
 ## Events
 

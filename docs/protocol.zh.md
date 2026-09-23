@@ -9,7 +9,7 @@
 `dsh --profile multica --probe` 输出一个发现对象并成功退出：
 
 ```json
-{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.0","protocol_version":2}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.2","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` 输出一个 `models` 事件。模型 id 分别对 DSH 提供方 id 和模型 id 做百分号编码，并用一个 `/` 分隔。
@@ -43,6 +43,10 @@
     "soft_limit": 60,
     "hard_limit": 120
   },
+  "progress_reminder": {
+    "silence_ms": 90000,
+    "tool_calls": 5
+  },
   "mcp_servers": [
     {
       "name": "local-tools",
@@ -64,6 +68,8 @@
 ```
 
 `prompt` 可以为空。`request_id`、`cwd`、提供方/模型 id、Session id、MCP 名称、命令与 URL 必须是非空字符串。超时单位为毫秒，必须是正的安全整数。工具调用限制也必须是正的安全整数，并满足 `soft_limit < hard_limit`。达到软限制时，桥接器要求 Agent 停止宽泛探索并基于已有证据收尾；达到硬限制时取消 Agent，并返回 `TOOL_CALL_BUDGET_EXCEEDED`。
+
+`progress_reminder` 是可选项。当 Agent 连续执行 `tool_calls` 次工具仍未输出可见文本，或工具活动静默达到 `silence_ms` 时，桥接器会追加一条隐藏的 next-step 提醒，要求 Agent 简要汇报进展后继续执行。在 Agent 输出可见文本前，桥接器不会重复追加提醒。
 
 ## 输出事件
 

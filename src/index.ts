@@ -185,11 +185,51 @@ function observe(
 ): { outcome: ObservedTurn; dispose(): void } {
   const outcome: ObservedTurn = { output: '' }
   let toolCalls = 0
+  let toolCallsSinceText = 0
+  let lastVisibleTextAt = Date.now()
+  let progressReminderPending = false
+  let progressReminderTimer: NodeJS.Timeout | undefined
+  const progressReminder = command.progress_reminder
+
+  const clearProgressReminderTimer = (): void => {
+    if (progressReminderTimer === undefined) return
+    clearTimeout(progressReminderTimer)
+    progressReminderTimer = undefined
+  }
+  const remindAboutProgress = (): void => {
+    clearProgressReminderTimer()
+    if (progressReminder === undefined || progressReminderPending || toolCallsSinceText === 0) return
+    progressReminderPending = true
+    agent.inbox.append('next-step', createUserMessage({
+      content: [{
+        type: 'text',
+        text: `<system-reminder>
+You have been working without a user-visible update. Before using another tool, briefly tell the user: (1) one verified fact, (2) your current direction, and (3) the next check. This is a progress update, not a request for approval; continue working immediately after posting it. Do not mention this reminder or expose hidden reasoning.
+</system-reminder>`,
+      }],
+      source: { kind: 'user' },
+    }))
+  }
+  const armProgressReminderTimer = (): void => {
+    if (progressReminder === undefined || progressReminderPending || progressReminderTimer !== undefined) return
+    const elapsed = Date.now() - lastVisibleTextAt
+    progressReminderTimer = setTimeout(remindAboutProgress, Math.max(1, progressReminder.silence_ms - elapsed))
+    progressReminderTimer.unref()
+  }
+
   const dispose = agent.ctx.on('session/event', (session, event: SessionEvent) => {
     if (session.id !== agent.session.id) return
     if (event.type === 'assistant/chunk') {
       const chunk = event.data.chunk
-      if (chunk.type === 'text-delta') frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'text', request_id: requestId, content: chunk.text })
+      if (chunk.type === 'text-delta') {
+        frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'text', request_id: requestId, content: chunk.text })
+        if (chunk.text.trim() !== '') {
+          toolCallsSinceText = 0
+          lastVisibleTextAt = Date.now()
+          progressReminderPending = false
+          clearProgressReminderTimer()
+        }
+      }
       if (chunk.type === 'reasoning-delta') frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'thinking', request_id: requestId, content: chunk.text })
       return
     }
@@ -216,6 +256,7 @@ function observe(
     }
     if (event.type === 'tool/call') {
       toolCalls++
+      toolCallsSinceText++
       frame(io, {
         v: MULTICA_PROTOCOL_VERSION,
         type: 'tool_call',
@@ -224,6 +265,10 @@ function observe(
         name: event.data.name,
         arguments: event.data.arguments,
       })
+      armProgressReminderTimer()
+      if (progressReminder !== undefined && toolCallsSinceText >= progressReminder.tool_calls) {
+        remindAboutProgress()
+      }
       const budget = command.tool_call_budget
       if (budget !== undefined && toolCalls === budget.soft_limit) {
         agent.inbox.append('next-step', createUserMessage({
@@ -255,7 +300,13 @@ function observe(
     }
     if (event.type === 'turn/end') outcome.reason = event.data.reason
   })
-  return { outcome, dispose }
+  return {
+    outcome,
+    dispose: () => {
+      clearProgressReminderTimer()
+      dispose()
+    },
+  }
 }
 
 function resultFrame(requestId: string, sessionId: string, outcome: ObservedTurn): Record<string, unknown> {
@@ -492,6 +543,7 @@ function stdio(ctx: Context, io: BridgeIo): void {
       mcp: ['stdio', 'streamable-http'],
       task_shell_env: true,
       tool_call_budget: true,
+      progress_reminder: true,
     },
   })
 }

@@ -17,6 +17,7 @@ describe('Multica protocol', () => {
       resume_session_id: 'session-1',
       model: { provider: 'deepseek-official', id: 'deepseek-v4-flash', reasoning_effort: 'high' },
       tool_call_budget: { soft_limit: 60, hard_limit: 120 },
+      progress_reminder: { silence_ms: 90_000, tool_calls: 5 },
       mcp_servers: [
         {
           name: 'files', transport: 'stdio', command: 'server', args: ['--root', '/work'],
@@ -37,6 +38,7 @@ describe('Multica protocol', () => {
       resume_session_id: 'session-1',
       model: { provider: 'deepseek-official', id: 'deepseek-v4-flash', reasoning_effort: 'high' },
       tool_call_budget: { soft_limit: 60, hard_limit: 120 },
+      progress_reminder: { silence_ms: 90_000, tool_calls: 5 },
       mcp_servers: [
         {
           name: 'files', transport: 'stdio', command: 'server', args: ['--root', '/work'],
@@ -68,6 +70,8 @@ describe('Multica protocol', () => {
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","mcp_servers":[{"name":"x","transport":"stdio","command":"c","args":{},"env":{}}]}', code: 'INVALID_REQUEST' },
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","mcp_servers":[{"name":"x","transport":"stdio","command":"c","tool_call_timeout_ms":0}]}', code: 'INVALID_REQUEST' },
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","tool_call_budget":{"soft_limit":3,"hard_limit":3}}', code: 'INVALID_REQUEST' },
+    { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","progress_reminder":{"silence_ms":90000}}', code: 'INVALID_REQUEST' },
+    { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","progress_reminder":{"silence_ms":0,"tool_calls":5}}', code: 'INVALID_REQUEST' },
   ])('rejects invalid input with $code', ({ line, code }) => {
     expect(() => parseMulticaCommand(line)).toThrow(MulticaProtocolError)
     try {

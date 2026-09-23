@@ -39,7 +39,7 @@ To install a local checkout, build a tarball first:
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.0.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.2.tgz
 dsh --profile multica --probe
 ```
 

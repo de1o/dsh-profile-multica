@@ -50,7 +50,7 @@ try {
     v: 2,
     type: 'probe',
     runtime: 'dsh',
-    plugin_version: '0.2.1',
+    plugin_version: '0.2.2',
     protocol_version: 2,
   })
   process.stdout.write('packed install and probe verified\n')

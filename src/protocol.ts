@@ -9,6 +9,12 @@ export interface MulticaToolCallBudget {
   hard_limit: number
 }
 
+/** Ask a silent run to publish user-visible progress without stopping it. */
+export interface MulticaProgressReminder {
+  silence_ms: number
+  tool_calls: number
+}
+
 /** Model selection carried by an execute command. */
 export interface MulticaModelSelection {
   provider: string
@@ -47,6 +53,7 @@ export interface MulticaExecuteCommand {
   reasoning_effort?: string
   mcp_servers: MulticaMcpServer[]
   tool_call_budget?: MulticaToolCallBudget
+  progress_reminder?: MulticaProgressReminder
 }
 
 /** Cancel the currently active task. */
@@ -106,6 +113,16 @@ function toolCallBudget(value: unknown): MulticaToolCallBudget {
     throw new MulticaProtocolError('INVALID_REQUEST', 'tool_call_budget.soft_limit must be less than hard_limit')
   }
   return { soft_limit: softLimit, hard_limit: hardLimit }
+}
+
+function progressReminder(value: unknown): MulticaProgressReminder {
+  const source = record(value, 'progress_reminder')
+  const silenceMs = timeout(source.silence_ms, 'progress_reminder.silence_ms')
+  const toolCalls = timeout(source.tool_calls, 'progress_reminder.tool_calls')
+  if (silenceMs === undefined || toolCalls === undefined) {
+    throw new MulticaProtocolError('INVALID_REQUEST', 'progress_reminder requires silence_ms and tool_calls')
+  }
+  return { silence_ms: silenceMs, tool_calls: toolCalls }
 }
 
 function mcpServer(value: unknown, index: number): MulticaMcpServer {
@@ -188,6 +205,9 @@ export function parseMulticaCommand(line: string): MulticaCommand {
     ...source.tool_call_budget === undefined
       ? {}
       : { tool_call_budget: toolCallBudget(source.tool_call_budget) },
+    ...source.progress_reminder === undefined
+      ? {}
+      : { progress_reminder: progressReminder(source.progress_reminder) },
   }
 }
 

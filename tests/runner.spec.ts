@@ -61,7 +61,7 @@ describe('Multica runner', () => {
     expect(await run('probe')).toMatchObject({
       code: 0,
       err: '',
-      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.1', protocol_version: 2 }],
+      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.2', protocol_version: 2 }],
     })
   })
 
@@ -253,6 +253,117 @@ describe('Multica runner', () => {
       type: 'result', status: 'failed', stop_reason: 'tool-call-budget',
       error: { code: 'TOOL_CALL_BUDGET_EXCEEDED' },
     })
+    await ctx.fiber.dispose()
+  })
+
+  it('injects one hidden progress reminder until the agent publishes text', async () => {
+    const ctx = new Context()
+    const input = new PassThrough()
+    let out = ''
+    const reminders: string[] = []
+    const agentCtx = new Context()
+    const session = { id: 'session-progress' }
+    const emit = (event: unknown): void => agentCtx.emit('session/event', session as never, event as never)
+    const emitToolCalls = (start: number, count: number): void => {
+      for (let index = start; index < start + count; index++) {
+        emit({
+          type: 'tool/call', seq: index, time: index,
+          data: { turn: 1, step: index, callId: `call-${index}`, name: 'bash', arguments: '{}' },
+        })
+      }
+    }
+    const agent = {
+      id: 'session-progress', session, ctx: agentCtx,
+      inbox: {
+        append: (_target: string, message: { content: Array<{ text: string }> }) => {
+          reminders.push(message.content[0]?.text ?? '')
+        },
+      },
+      cancel: () => {},
+      followup: () => {
+        emitToolCalls(1, 5)
+        emitToolCalls(6, 2)
+        emit({
+          type: 'assistant/chunk', seq: 8, time: 8,
+          data: { turn: 1, step: 8, chunk: { type: 'text-delta', index: 0, text: 'Progress update' } },
+        })
+        emitToolCalls(9, 5)
+        emit({ type: 'turn/end', seq: 14, time: 14, data: { turn: 1, reason: { kind: 'completed' } } })
+      },
+      whenIdle: () => Promise.resolve(),
+    }
+    ctx.provide('agents', { create: async () => ({ agent, dispose: () => agentCtx.fiber.dispose() }) } as never)
+    ctx.provide('sessions', { flush: async () => true } as never)
+    ctx.provide('shellEnv', { register: () => () => {} } as never)
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'provider/a', model: 'model/b' }),
+    } as never)
+    ctx.provide('llm', { listProviders: () => [] } as never)
+    internals.stdin = input
+    internals.stdout = { write: (chunk: string) => { out += chunk; return true } }
+    internals.stderr = { write: () => true }
+    const exited = new Promise<number>(resolve => ctx.provide('appExit', resolve))
+    apply(ctx, { mode: 'stdio' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    input.write(`${JSON.stringify({
+      v: 2, type: 'execute', request_id: 'request-progress', cwd: '/work', prompt: 'work',
+      progress_reminder: { silence_ms: 90_000, tool_calls: 5 },
+    })}\n`)
+    expect(await exited).toBe(0)
+    expect(reminders).toHaveLength(2)
+    expect(reminders[0]).toContain('user-visible update')
+    expect(reminders[0]).toContain('not a request for approval')
+    expect(parseFrames(out).filter(value => value.type === 'text')).toHaveLength(1)
+    await ctx.fiber.dispose()
+  })
+
+  it('injects a progress reminder when one tool stays silent past the time limit', async () => {
+    const ctx = new Context()
+    const input = new PassThrough()
+    let out = ''
+    const reminders: string[] = []
+    const agentCtx = new Context()
+    const session = { id: 'session-silent-tool' }
+    const emit = (event: unknown): void => agentCtx.emit('session/event', session as never, event as never)
+    const agent = {
+      id: 'session-silent-tool', session, ctx: agentCtx,
+      inbox: {
+        append: (_target: string, message: { content: Array<{ text: string }> }) => {
+          reminders.push(message.content[0]?.text ?? '')
+        },
+      },
+      cancel: () => {},
+      followup: () => emit({
+        type: 'tool/call', seq: 1, time: 1,
+        data: { turn: 1, step: 1, callId: 'call-1', name: 'bash', arguments: '{}' },
+      }),
+      whenIdle: () => new Promise<void>((resolve) => {
+        setTimeout(() => {
+          emit({ type: 'turn/end', seq: 2, time: 2, data: { turn: 1, reason: { kind: 'completed' } } })
+          resolve()
+        }, 30)
+      }),
+    }
+    ctx.provide('agents', { create: async () => ({ agent, dispose: () => agentCtx.fiber.dispose() }) } as never)
+    ctx.provide('sessions', { flush: async () => true } as never)
+    ctx.provide('shellEnv', { register: () => () => {} } as never)
+    ctx.provide('agentDefaultModel', {
+      currentSelection: () => ({ provider: 'provider/a', model: 'model/b' }),
+    } as never)
+    ctx.provide('llm', { listProviders: () => [] } as never)
+    internals.stdin = input
+    internals.stdout = { write: (chunk: string) => { out += chunk; return true } }
+    internals.stderr = { write: () => true }
+    const exited = new Promise<number>(resolve => ctx.provide('appExit', resolve))
+    apply(ctx, { mode: 'stdio' })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    input.write(`${JSON.stringify({
+      v: 2, type: 'execute', request_id: 'request-silent-tool', cwd: '/work', prompt: 'work',
+      progress_reminder: { silence_ms: 10, tool_calls: 50 },
+    })}\n`)
+    expect(await exited).toBe(0)
+    expect(reminders).toHaveLength(1)
+    expect(parseFrames(out).filter(value => value.type === 'tool_call')).toHaveLength(1)
     await ctx.fiber.dispose()
   })
 
