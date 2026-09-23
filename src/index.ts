@@ -18,6 +18,8 @@ import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
 import type {} from '@deepseek-ai/dsh-shell-env'
+import type {} from '@deepseek-ai/dsh-attachment'
+import { loadMulticaImages } from './images.ts'
 import {
   encodeMulticaFrame,
   MULTICA_PROTOCOL_VERSION,
@@ -456,8 +458,16 @@ async function execute(ctx: Context, io: BridgeIo, command: MulticaExecuteComman
       })
       return
     }
+    const content: ContentBlock[] = [{ type: 'text', text: command.prompt }]
+    if (command.image_attachment_ids?.length) {
+      const attachments = ctx.get('attachments')
+      if (!attachments) throw new Error('DSH image attachment service is unavailable')
+      const images = await loadMulticaImages(command.image_attachment_ids, attachments.imageLimits.maxImageBytes, active.controller.signal)
+      const refs = await attachments.saveImages(images)
+      content.push(...refs.map((attachment) => ({ type: 'image' as const, attachment })))
+    }
     handle.agent.followup(createUserMessage({
-      content: [{ type: 'text', text: command.prompt }],
+      content,
       source: { kind: 'user' },
     }))
     await handle.agent.whenIdle()
@@ -544,6 +554,7 @@ function stdio(ctx: Context, io: BridgeIo): void {
       task_shell_env: true,
       tool_call_budget: true,
       progress_reminder: true,
+      images: ctx.get('attachments') !== undefined,
     },
   })
 }

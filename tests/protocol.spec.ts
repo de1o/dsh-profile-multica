@@ -14,6 +14,7 @@ describe('Multica protocol', () => {
       request_id: 'request-1',
       cwd: '/work',
       prompt: 'fix it',
+      image_attachment_ids: ['11111111-1111-1111-1111-111111111111'],
       resume_session_id: 'session-1',
       model: { provider: 'deepseek-official', id: 'deepseek-v4-flash', reasoning_effort: 'high' },
       tool_call_budget: { soft_limit: 60, hard_limit: 120 },
@@ -35,6 +36,7 @@ describe('Multica protocol', () => {
       request_id: 'request-1',
       cwd: '/work',
       prompt: 'fix it',
+      image_attachment_ids: ['11111111-1111-1111-1111-111111111111'],
       resume_session_id: 'session-1',
       model: { provider: 'deepseek-official', id: 'deepseek-v4-flash', reasoning_effort: 'high' },
       tool_call_budget: { soft_limit: 60, hard_limit: 120 },
@@ -72,6 +74,7 @@ describe('Multica protocol', () => {
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","tool_call_budget":{"soft_limit":3,"hard_limit":3}}', code: 'INVALID_REQUEST' },
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","progress_reminder":{"silence_ms":90000}}', code: 'INVALID_REQUEST' },
     { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","progress_reminder":{"silence_ms":0,"tool_calls":5}}', code: 'INVALID_REQUEST' },
+    { line: '{"v":2,"type":"execute","request_id":"r","cwd":"/w","prompt":"x","image_attachment_ids":[3]}', code: 'INVALID_REQUEST' },
   ])('rejects invalid input with $code', ({ line, code }) => {
     expect(() => parseMulticaCommand(line)).toThrow(MulticaProtocolError)
     try {

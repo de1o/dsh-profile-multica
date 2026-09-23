@@ -48,6 +48,7 @@ export interface MulticaExecuteCommand {
   request_id: string
   cwd: string
   prompt: string
+  image_attachment_ids?: string[]
   resume_session_id?: string
   model?: MulticaModelSelection
   reasoning_effort?: string
@@ -188,12 +189,17 @@ export function parseMulticaCommand(line: string): MulticaCommand {
     }
   const servers = source.mcp_servers === undefined ? [] : source.mcp_servers
   if (!Array.isArray(servers)) throw new MulticaProtocolError('INVALID_REQUEST', 'mcp_servers must be an array')
+  const images = source.image_attachment_ids === undefined ? [] : source.image_attachment_ids
+  if (!Array.isArray(images) || images.length > 10) {
+    throw new MulticaProtocolError('INVALID_REQUEST', 'image_attachment_ids must be an array of at most 10 ids')
+  }
   return {
     v: 2,
     type,
     request_id: requestId,
     cwd: string(source.cwd, 'cwd'),
     prompt: string(source.prompt, 'prompt', true),
+    ...images.length === 0 ? {} : { image_attachment_ids: images.map((id, index) => string(id, `image_attachment_ids[${index}]`)) },
     ...source.resume_session_id === undefined
       ? {}
       : { resume_session_id: string(source.resume_session_id, 'resume_session_id') },
