@@ -38,7 +38,7 @@ describe('Multica model discovery', () => {
     expect(await exited).toBe(0)
     expect(stderr).toContain('could not list provider broken')
     expect(JSON.parse(output)).toEqual({
-      v: 1,
+      v: 2,
       type: 'models',
       models: [{
         id: 'healthy/model-a',

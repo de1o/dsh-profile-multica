@@ -17,6 +17,7 @@ import { SessionId } from '@deepseek-ai/dsh-session'
 import type { SessionEvent, TurnEndReason } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type {} from '@deepseek-ai/dsh-cmdline'
+import type {} from '@deepseek-ai/dsh-shell-env'
 import {
   encodeMulticaFrame,
   MULTICA_PROTOCOL_VERSION,
@@ -31,7 +32,9 @@ import type { MulticaMode } from './startup.ts'
 /** Stable Cordis plugin name. */
 export const name = 'multica-runner'
 /** Core services required by every bridge mode. */
-export const inject = ['agentDefaultModel', 'agents', 'llm', 'sessions']
+export const inject = ['agentDefaultModel', 'agents', 'llm', 'sessions', 'shellEnv']
+
+const DSH_MULTICA_TASK_TOKEN = 'DSH_MULTICA_TASK_TOKEN'
 
 /** Runner config resolved from the startup provider. */
 export interface Config {
@@ -132,6 +135,22 @@ async function setupAgent(agentCtx: Context, chosen: ModelSelection, command: Mu
   }
 }
 
+function registerTaskShellEnv(ctx: Context): void {
+  const taskToken = process.env.MULTICA_TOKEN
+  if (taskToken === undefined || taskToken === '') return
+  const shellEnv = ctx.get('shellEnv')
+  if (shellEnv === undefined) throw new Error('multica-runner: shellEnv service is unavailable')
+  shellEnv.register({
+    name: 'multica-task-auth',
+    variables: {
+      [DSH_MULTICA_TASK_TOKEN]: {
+        description: 'Task-scoped Multica API credential forwarded by the Multica runtime bridge.',
+      },
+    },
+    resolve: () => ({ [DSH_MULTICA_TASK_TOKEN]: taskToken }),
+  })
+}
+
 function contentText(blocks: readonly ContentBlock[]): string {
   return blocks.map((block) => {
     switch (block.type) {
@@ -155,16 +174,63 @@ function contentText(blocks: readonly ContentBlock[]): string {
 interface ObservedTurn {
   output: string
   reason?: TurnEndReason
+  budgetExceeded?: number
 }
 
-function observe(io: BridgeIo, requestId: string, agent: Agent): { outcome: ObservedTurn; dispose(): void } {
+function observe(
+  io: BridgeIo,
+  requestId: string,
+  agent: Agent,
+  command: MulticaExecuteCommand,
+): { outcome: ObservedTurn; dispose(): void } {
   const outcome: ObservedTurn = { output: '' }
+  let toolCalls = 0
+  let toolCallsSinceText = 0
+  let lastVisibleTextAt = Date.now()
+  let progressReminderPending = false
+  let progressReminderTimer: NodeJS.Timeout | undefined
+  const progressReminder = command.progress_reminder
+
+  const clearProgressReminderTimer = (): void => {
+    if (progressReminderTimer === undefined) return
+    clearTimeout(progressReminderTimer)
+    progressReminderTimer = undefined
+  }
+  const remindAboutProgress = (): void => {
+    clearProgressReminderTimer()
+    if (progressReminder === undefined || progressReminderPending || toolCallsSinceText === 0) return
+    progressReminderPending = true
+    agent.inbox.append('next-step', createUserMessage({
+      content: [{
+        type: 'text',
+        text: `<system-reminder>
+You have been working without a user-visible update. Before using another tool, briefly tell the user: (1) one verified fact, (2) your current direction, and (3) the next check. This is a progress update, not a request for approval; continue working immediately after posting it. Do not mention this reminder or expose hidden reasoning.
+</system-reminder>`,
+      }],
+      source: { kind: 'user' },
+    }))
+  }
+  const armProgressReminderTimer = (): void => {
+    if (progressReminder === undefined || progressReminderPending || progressReminderTimer !== undefined) return
+    const elapsed = Date.now() - lastVisibleTextAt
+    progressReminderTimer = setTimeout(remindAboutProgress, Math.max(1, progressReminder.silence_ms - elapsed))
+    progressReminderTimer.unref()
+  }
+
   const dispose = agent.ctx.on('session/event', (session, event: SessionEvent) => {
     if (session.id !== agent.session.id) return
     if (event.type === 'assistant/chunk') {
       const chunk = event.data.chunk
-      if (chunk.type === 'text-delta') frame(io, { v: 1, type: 'text', request_id: requestId, content: chunk.text })
-      if (chunk.type === 'reasoning-delta') frame(io, { v: 1, type: 'thinking', request_id: requestId, content: chunk.text })
+      if (chunk.type === 'text-delta') {
+        frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'text', request_id: requestId, content: chunk.text })
+        if (chunk.text.trim() !== '') {
+          toolCallsSinceText = 0
+          lastVisibleTextAt = Date.now()
+          progressReminderPending = false
+          clearProgressReminderTimer()
+        }
+      }
+      if (chunk.type === 'reasoning-delta') frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'thinking', request_id: requestId, content: chunk.text })
       return
     }
     if (event.type === 'assistant/message') {
@@ -175,7 +241,7 @@ function observe(io: BridgeIo, requestId: string, agent: Agent): { outcome: Obse
       const usage = event.data.usage
       if (usage !== undefined) {
         frame(io, {
-          v: 1,
+          v: MULTICA_PROTOCOL_VERSION,
           type: 'usage',
           request_id: requestId,
           provider: event.data.message.source.provider,
@@ -189,20 +255,40 @@ function observe(io: BridgeIo, requestId: string, agent: Agent): { outcome: Obse
       return
     }
     if (event.type === 'tool/call') {
+      toolCalls++
+      toolCallsSinceText++
       frame(io, {
-        v: 1,
+        v: MULTICA_PROTOCOL_VERSION,
         type: 'tool_call',
         request_id: requestId,
         call_id: event.data.callId,
         name: event.data.name,
         arguments: event.data.arguments,
       })
+      armProgressReminderTimer()
+      if (progressReminder !== undefined && toolCallsSinceText >= progressReminder.tool_calls) {
+        remindAboutProgress()
+      }
+      const budget = command.tool_call_budget
+      if (budget !== undefined && toolCalls === budget.soft_limit) {
+        agent.inbox.append('next-step', createUserMessage({
+          content: [{
+            type: 'text',
+            text: `Platform execution budget checkpoint: you have used ${toolCalls} tool calls. Stop broad exploration, use the evidence already collected, and provide the requested result. Use only essential remaining tool calls.`,
+          }],
+          source: { kind: 'user' },
+        }))
+      }
+      if (budget !== undefined && toolCalls >= budget.hard_limit && outcome.budgetExceeded === undefined) {
+        outcome.budgetExceeded = budget.hard_limit
+        agent.cancel({ kind: 'user' })
+      }
       return
     }
     if (event.type === 'tool/result') {
       const block = event.data.message.content[0]
       frame(io, {
-        v: 1,
+        v: MULTICA_PROTOCOL_VERSION,
         type: 'tool_result',
         request_id: requestId,
         call_id: event.data.message.source.callId,
@@ -214,14 +300,35 @@ function observe(io: BridgeIo, requestId: string, agent: Agent): { outcome: Obse
     }
     if (event.type === 'turn/end') outcome.reason = event.data.reason
   })
-  return { outcome, dispose }
+  return {
+    outcome,
+    dispose: () => {
+      clearProgressReminderTimer()
+      dispose()
+    },
+  }
 }
 
 function resultFrame(requestId: string, sessionId: string, outcome: ObservedTurn): Record<string, unknown> {
+  if (outcome.budgetExceeded !== undefined) {
+    return {
+      v: MULTICA_PROTOCOL_VERSION,
+      type: 'result',
+      request_id: requestId,
+      status: 'failed',
+      stop_reason: 'tool-call-budget',
+      session_id: sessionId,
+      output: outcome.output,
+      error: {
+        code: 'TOOL_CALL_BUDGET_EXCEEDED',
+        message: `DeepSeek Harness exceeded the ${outcome.budgetExceeded} tool-call execution budget`,
+      },
+    }
+  }
   const reason = outcome.reason
   if (reason?.kind === 'completed' || reason?.kind === 'max-tokens') {
     return {
-      v: 1,
+      v: MULTICA_PROTOCOL_VERSION,
       type: 'result',
       request_id: requestId,
       status: 'completed',
@@ -232,7 +339,7 @@ function resultFrame(requestId: string, sessionId: string, outcome: ObservedTurn
   }
   if (reason?.kind === 'aborted') {
     return {
-      v: 1,
+      v: MULTICA_PROTOCOL_VERSION,
       type: 'result',
       request_id: requestId,
       status: 'cancelled',
@@ -245,7 +352,7 @@ function resultFrame(requestId: string, sessionId: string, outcome: ObservedTurn
     ? reason.error
     : { code: reason?.kind === 'blocked' ? 'BLOCKED' : 'INCOMPLETE', message: `turn ended with ${reason?.kind ?? 'no result'}` }
   return {
-    v: 1,
+    v: MULTICA_PROTOCOL_VERSION,
     type: 'result',
     request_id: requestId,
     status: 'failed',
@@ -288,7 +395,7 @@ async function models(ctx: Context, io: BridgeIo): Promise<void> {
       diagnostic(io, new Error(`could not list provider ${provider.id}`, { cause: error }))
     }
   }
-  frame(io, { v: 1, type: 'models', models: entries })
+  frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'models', models: entries })
 }
 
 interface ActiveRun {
@@ -318,7 +425,7 @@ async function execute(ctx: Context, io: BridgeIo, command: MulticaExecuteComman
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       frame(io, {
-        v: 1,
+        v: MULTICA_PROTOCOL_VERSION,
         type: 'result',
         request_id: command.request_id,
         status: active.controller.signal.aborted ? 'cancelled' : 'failed',
@@ -329,9 +436,9 @@ async function execute(ctx: Context, io: BridgeIo, command: MulticaExecuteComman
       return
     }
     active.agent = handle.agent
-    observed = observe(io, command.request_id, handle.agent)
+    observed = observe(io, command.request_id, handle.agent, command)
     frame(io, {
-      v: 1,
+      v: MULTICA_PROTOCOL_VERSION,
       type: 'session',
       request_id: command.request_id,
       session_id: handle.agent.session.id,
@@ -339,7 +446,7 @@ async function execute(ctx: Context, io: BridgeIo, command: MulticaExecuteComman
     })
     if (active.controller.signal.aborted) {
       frame(io, {
-        v: 1,
+        v: MULTICA_PROTOCOL_VERSION,
         type: 'result',
         request_id: command.request_id,
         status: 'cancelled',
@@ -359,7 +466,7 @@ async function execute(ctx: Context, io: BridgeIo, command: MulticaExecuteComman
   } catch (error) {
     diagnostic(io, error)
     frame(io, {
-      v: 1,
+      v: MULTICA_PROTOCOL_VERSION,
       type: 'result',
       request_id: command.request_id,
       status: active.controller.signal.aborted ? 'cancelled' : 'failed',
@@ -426,11 +533,18 @@ function stdio(ctx: Context, io: BridgeIo): void {
     if (active === undefined) finish(0)
   })
   frame(io, {
-    v: 1,
+    v: MULTICA_PROTOCOL_VERSION,
     type: 'ready',
     runtime: 'dsh',
     plugin_version: version(),
-    capabilities: { cancel: true, resume: true, mcp: ['stdio', 'streamable-http'] },
+    capabilities: {
+      cancel: true,
+      resume: true,
+      mcp: ['stdio', 'streamable-http'],
+      task_shell_env: true,
+      tool_call_budget: true,
+      progress_reminder: true,
+    },
   })
 }
 
@@ -440,7 +554,7 @@ async function run(ctx: Context, mode: MulticaMode, io: BridgeIo): Promise<void>
     || ctx.get('llm') === undefined || ctx.get('sessions') === undefined) return
   if (mode === 'probe') {
     frame(io, {
-      v: 1,
+      v: MULTICA_PROTOCOL_VERSION,
       type: 'probe',
       runtime: 'dsh',
       plugin_version: version(),
@@ -454,6 +568,7 @@ async function run(ctx: Context, mode: MulticaMode, io: BridgeIo): Promise<void>
     io.exit(0)
     return
   }
+  registerTaskShellEnv(ctx)
   stdio(ctx, io)
 }
 

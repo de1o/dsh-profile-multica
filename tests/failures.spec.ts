@@ -47,7 +47,7 @@ describe('Multica failure results', () => {
     } as never)
 
     const result = await start(ctx, new PassThrough(), {
-      v: 1,
+      v: 2,
       type: 'execute',
       request_id: 'request-resume',
       cwd: '/work',
@@ -99,7 +99,7 @@ describe('Multica failure results', () => {
     } as never)
 
     const result = await start(ctx, new PassThrough(), {
-      v: 1, type: 'execute', request_id: 'request-flush', cwd: '/work', prompt: 'persist me',
+      v: 2, type: 'execute', request_id: 'request-flush', cwd: '/work', prompt: 'persist me',
     })
 
     expect(result.code).toBe(0)

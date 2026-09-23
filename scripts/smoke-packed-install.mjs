@@ -47,11 +47,11 @@ try {
     '--profile', 'multica', '--probe',
   ], isolatedEnv)
   assert.deepEqual(JSON.parse(probe.stdout.trim()), {
-    v: 1,
+    v: 2,
     type: 'probe',
     runtime: 'dsh',
-    plugin_version: '0.1.0',
-    protocol_version: 1,
+    plugin_version: '0.2.2',
+    protocol_version: 2,
   })
   process.stdout.write('packed install and probe verified\n')
 } finally {
