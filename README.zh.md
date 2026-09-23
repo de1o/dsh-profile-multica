@@ -4,6 +4,8 @@
 
 一个可安装的社区 bundle，通过带版本的 JSONL 进程协议把官方 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) CLI 接入 Multica。
 
+本仓库是 Multica 自维护并用于 DSH 运行时发布的 fork；上游变更会在完成兼容性验证后按需引入。
+
 请求、事件、取消和退出语义见[协议参考](docs/protocol.zh.md)。
 
 安装后，独立 profile 提供三个命令：

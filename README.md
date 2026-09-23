@@ -4,6 +4,8 @@ English | [中文](README.zh.md)
 
 An installable community bundle that exposes the official [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) CLI to Multica through a versioned JSONL process protocol.
 
+This repository is the Multica-maintained fork used for its DSH runtime releases. Upstream changes are adopted deliberately after compatibility verification.
+
 See the [protocol reference](docs/protocol.md) for request, event, cancellation, and exit semantics.
 
 The bundle adds three commands to a dedicated profile:
