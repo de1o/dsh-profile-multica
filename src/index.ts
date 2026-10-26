@@ -163,8 +163,6 @@ function contentText(blocks: readonly ContentBlock[]): string {
         return `[image:${block.attachment.attachmentId}]`
       case 'tool-call':
         return `${block.name}(${block.arguments})`
-      case 'tool-result':
-        return contentText(block.content)
       default:
         // ContentBlockMap is merge-extensible. Unknown plugin blocks have no
         // representation in Multica's text-only tool-result frame.
@@ -219,22 +217,23 @@ You have been working without a user-visible update. Before using another tool, 
     progressReminderTimer.unref()
   }
 
+  const disposeStream = agent.ctx.on('agent/assistant-stream', (payload) => {
+    if (payload.agent !== agent || payload.frame.type !== 'chunk') return
+    const chunk = payload.frame.chunk
+    if (chunk.type === 'text-delta') {
+      frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'text', request_id: requestId, content: chunk.text })
+      if (chunk.text.trim() !== '') {
+        toolCallsSinceText = 0
+        lastVisibleTextAt = Date.now()
+        progressReminderPending = false
+        clearProgressReminderTimer()
+      }
+    }
+    if (chunk.type === 'reasoning-delta') frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'thinking', request_id: requestId, content: chunk.text })
+  })
+
   const dispose = agent.ctx.on('session/event', (session, event: SessionEvent) => {
     if (session.id !== agent.session.id) return
-    if (event.type === 'assistant/chunk') {
-      const chunk = event.data.chunk
-      if (chunk.type === 'text-delta') {
-        frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'text', request_id: requestId, content: chunk.text })
-        if (chunk.text.trim() !== '') {
-          toolCallsSinceText = 0
-          lastVisibleTextAt = Date.now()
-          progressReminderPending = false
-          clearProgressReminderTimer()
-        }
-      }
-      if (chunk.type === 'reasoning-delta') frame(io, { v: MULTICA_PROTOCOL_VERSION, type: 'thinking', request_id: requestId, content: chunk.text })
-      return
-    }
     if (event.type === 'assistant/message') {
       outcome.output = event.data.message.content
         .filter(block => block.type === 'text')
@@ -288,15 +287,14 @@ You have been working without a user-visible update. Before using another tool, 
       return
     }
     if (event.type === 'tool/result') {
-      const block = event.data.message.content[0]
       frame(io, {
         v: MULTICA_PROTOCOL_VERSION,
         type: 'tool_result',
         request_id: requestId,
-        call_id: event.data.message.source.callId,
+        call_id: event.data.message.toolCallId,
         name: event.data.error?.name ?? '',
-        output: contentText(block.content),
-        is_error: block.isError ?? false,
+        output: contentText(event.data.message.content),
+        is_error: event.data.message.isError ?? false,
       })
       return
     }
@@ -306,6 +304,7 @@ You have been working without a user-visible update. Before using another tool, 
     outcome,
     dispose: () => {
       clearProgressReminderTimer()
+      disposeStream()
       dispose()
     },
   }

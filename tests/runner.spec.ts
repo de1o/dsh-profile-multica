@@ -2,7 +2,7 @@
 
 import { PassThrough } from 'node:stream'
 import { Context } from '@deepseek-ai/cordis'
-import { createAssistantMessage } from '@deepseek-ai/dsh-llm'
+import { createAssistantMessage, createToolResultMessage } from '@deepseek-ai/dsh-llm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { apply, Config, internals } from '../src/index.ts'
 
@@ -61,7 +61,7 @@ describe('Multica runner', () => {
     expect(await run('probe')).toMatchObject({
       code: 0,
       err: '',
-      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.2.3', protocol_version: 2 }],
+      lines: [{ v: 2, type: 'probe', runtime: 'dsh', plugin_version: '0.3.0', protocol_version: 2 }],
     })
   })
 
@@ -145,10 +145,19 @@ describe('Multica runner', () => {
           type: 'tool/call', seq: 0, time: 1,
           data: { turn: 1, step: 1, callId: 'call-1', name: 'bash', arguments: '{"command":"pwd"}' },
         })
-        emit({
-          type: 'assistant/chunk', seq: 1, time: 2,
-          data: { turn: 1, step: 1, chunk: { type: 'text-delta', index: 0, text: 'hello' } },
+        agentCtx.emit('agent/assistant-stream', {
+          agent: agent as never,
+          frame: { type: 'chunk', attemptId: 'attempt-1' as never, revision: 1, index: 0, time: 2,
+            chunk: { type: 'text-delta', index: 0, text: 'hello' } },
         })
+        for (const isError of [false, true]) {
+          emit({
+            type: 'tool/result', seq: 2, time: 3,
+            data: { turn: 1, step: 1, message: createToolResultMessage({
+              callId: 'call-1' as never, content: [{ type: 'text', text: isError ? 'denied' : '/work' }], isError,
+            }) },
+          })
+        }
         emit({
           type: 'assistant/message', seq: 2, time: 3,
           data: {
@@ -193,7 +202,11 @@ describe('Multica runner', () => {
     expect(await exited).toBe(0)
     expect(flushed).toBe(true)
     const frames = parseFrames(out)
-    expect(frames.map(value => value.type)).toEqual(['ready', 'session', 'tool_call', 'text', 'usage', 'result'])
+    expect(frames.map(value => value.type)).toEqual(['ready', 'session', 'tool_call', 'text', 'tool_result', 'tool_result', 'usage', 'result'])
+    expect(frames.filter(value => value.type === 'tool_result')).toMatchObject([
+      { call_id: 'call-1', output: '/work', is_error: false },
+      { call_id: 'call-1', output: 'denied', is_error: true },
+    ])
     expect(shellEnvContributor?.resolve({})).toEqual({ DSH_MULTICA_TASK_TOKEN: 'mat_task-test' })
     expect(checkpoints).toHaveLength(1)
     expect(checkpoints[0]).toContain('Stop broad exploration')
@@ -283,9 +296,10 @@ describe('Multica runner', () => {
       followup: () => {
         emitToolCalls(1, 5)
         emitToolCalls(6, 2)
-        emit({
-          type: 'assistant/chunk', seq: 8, time: 8,
-          data: { turn: 1, step: 8, chunk: { type: 'text-delta', index: 0, text: 'Progress update' } },
+        agentCtx.emit('agent/assistant-stream', {
+          agent: agent as never,
+          frame: { type: 'chunk', attemptId: 'attempt-1' as never, revision: 1, index: 0, time: 8,
+            chunk: { type: 'text-delta', index: 0, text: 'Progress update' } },
         })
         emitToolCalls(9, 5)
         emit({ type: 'turn/end', seq: 14, time: 14, data: { turn: 1, reason: { kind: 'completed' } } })

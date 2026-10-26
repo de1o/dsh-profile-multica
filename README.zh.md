@@ -23,16 +23,18 @@ execute 请求可以创建新 Agent 或恢复持久化 Session，选择提供方
 ## 环境要求
 
 - Node.js `^22.19.0` 或 `>=24.0.0`
-- `@deepseek-ai/dsh` `0.1.0-rc.7` 或兼容的后续预发布版本
+- `@deepseek-ai/dsh` `0.2.1-rc.2`（已验证的运行时版本）
 - `PATH` 中存在 pnpm，供 `dsh plugin` 使用
+
+`0.3.0` 适配 DSH `0.2.x` 的流式回复和工具结果接口。使用 DSH `0.1.x` 时请保留适配包 `0.2.3`；运行时与适配包应配套升级。
 
 ## 安装
 
 发布到 npm 后：
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.0-rc.7
-dsh plugin --profile multica add dsh-profile-multica
+npm install --global @deepseek-ai/dsh@0.2.1-rc.2
+dsh plugin --profile multica add dsh-profile-multica@0.3.0
 dsh --profile multica --probe
 ```
 
@@ -41,7 +43,7 @@ dsh --profile multica --probe
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.3.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.3.0.tgz
 dsh --profile multica --probe
 ```
 

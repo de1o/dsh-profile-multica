@@ -39,18 +39,18 @@ try {
   const isolatedEnv = { ...process.env, DSH_HOME: dshHome }
 
   run([
-    'dlx', '@deepseek-ai/dsh@0.1.0-rc.7',
+    'dlx', '@deepseek-ai/dsh@0.2.1-rc.2',
     'plugin', '--profile', 'multica', 'add', tarball,
   ], isolatedEnv)
   const probe = run([
-    'dlx', '@deepseek-ai/dsh@0.1.0-rc.7',
+    'dlx', '@deepseek-ai/dsh@0.2.1-rc.2',
     '--profile', 'multica', '--probe',
   ], isolatedEnv)
   assert.deepEqual(JSON.parse(probe.stdout.trim()), {
     v: 2,
     type: 'probe',
     runtime: 'dsh',
-    plugin_version: '0.2.2',
+    plugin_version: '0.3.0',
     protocol_version: 2,
   })
   process.stdout.write('packed install and probe verified\n')

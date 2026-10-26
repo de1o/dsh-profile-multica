@@ -44,9 +44,6 @@
     mode: !!js process.env.DSH_TOOLS_MODE
 
 - insert:
-    - id: code-runtime
-      name: '@deepseek-ai/dsh-code-runtime-worker-thread'
-
     - id: multica-startup
       name: 'dsh-profile-multica/startup'
 

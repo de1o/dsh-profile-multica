@@ -23,16 +23,18 @@ An execute request can create a fresh Agent or resume a persisted Session, selec
 ## Requirements
 
 - Node.js `^22.19.0` or `>=24.0.0`
-- `@deepseek-ai/dsh` `0.1.0-rc.7` or a compatible later prerelease
+- `@deepseek-ai/dsh` `0.2.1-rc.2` (the validated runtime version)
 - pnpm on `PATH` for `dsh plugin`
+
+Version `0.3.0` targets the DSH `0.2.x` assistant-stream and tool-result APIs. Keep bridge `0.2.3` when running DSH `0.1.x`; upgrade the runtime and bridge together.
 
 ## Install
 
 After the package is published to npm:
 
 ```bash
-npm install --global @deepseek-ai/dsh@0.1.0-rc.7
-dsh plugin --profile multica add dsh-profile-multica
+npm install --global @deepseek-ai/dsh@0.2.1-rc.2
+dsh plugin --profile multica add dsh-profile-multica@0.3.0
 dsh --profile multica --probe
 ```
 
@@ -41,7 +43,7 @@ To install a local checkout, build a tarball first:
 ```bash
 pnpm install
 pnpm pack
-dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.2.3.tgz
+dsh plugin --profile multica add /absolute/path/dsh-profile-multica-0.3.0.tgz
 dsh --profile multica --probe
 ```
 

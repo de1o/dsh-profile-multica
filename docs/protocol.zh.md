@@ -9,7 +9,7 @@
 `dsh --profile multica --probe` 输出一个发现对象并成功退出：
 
 ```json
-{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.3","protocol_version":2}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.3.0","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` 输出一个 `models` 事件。模型 id 分别对 DSH 提供方 id 和模型 id 做百分号编码，并用一个 `/` 分隔。
