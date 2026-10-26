@@ -9,7 +9,7 @@ The bridge implements protocol version `2`. Each input command and output event 
 `dsh --profile multica --probe` prints one discovery object and exits successfully:
 
 ```json
-{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.2.3","protocol_version":2}
+{"v":2,"type":"probe","runtime":"dsh","plugin_version":"0.3.0","protocol_version":2}
 ```
 
 `dsh --profile multica --list-models` prints one `models` event. Model ids percent-encode the DSH provider and model ids around one `/` separator.
